@@ -439,11 +439,15 @@ trstctl-cli --idempotency-key kms-key-1 managed-keys generate -f managed-key.jso
 printf '{"key_id":"<key-id>"}' | trstctl-cli --idempotency-key kms-key-1-rotate managed-keys rotate -f -
 printf '{"key_id":"<rotated-key-id>"}' | trstctl-cli --idempotency-key kms-key-1-zeroize managed-keys zeroize -f -
 
-# Run rollback-safe static credential rotation through a configured backend rotator.
+# Run rollback-safe static, connector-backed, or dynamic-lease rotation.
 cat > static-rotation.json <<'JSON'
 {"provider":"postgresql","key":"db/reporting","old_ref":"sec05_old"}
 JSON
 trstctl-cli --idempotency-key static-rotation-1 secrets rotations run -f static-rotation.json
+printf '{"provider":"connector:ci","key":"db/password","old_ref":"version:2","remote_key":"DB_PASSWORD"}' \
+  | trstctl-cli --idempotency-key connector-rotation-1 secrets rotations run -f -
+printf '{"provider":"dynamic-lease:postgresql","key":"readonly","old_ref":"lease-abc","target":"ci","remote_key":"DB_READONLY_DSN","ttl_seconds":600}' \
+  | trstctl-cli --idempotency-key dynamic-rotation-1 secrets rotations run -f -
 
 # Schedule the same dual-phase rotation and run due schedules from the served path.
 cat > static-rotation-schedule.json <<'JSON'

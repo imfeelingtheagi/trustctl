@@ -177,12 +177,35 @@ Be precise here (see [Current limitations](../limitations.md) and
      -d '{"provider":"postgresql","key":"db/reporting","old_ref":"sec05_old"}'
    ```
 
-   -> a rollback-safe static credential rotation runs through the served API. The
-   response contains only metadata such as `old_ref`, `new_ref`, `completed`,
-   `rolled_back`, and `failed_phase`; it never returns the new credential value.
+	   -> a rollback-safe static credential rotation runs through the served API. The
+	   response contains only metadata such as `old_ref`, `new_ref`, `completed`,
+	   `rolled_back`, and `failed_phase`; it never returns the new credential value.
 
-   ```sh
-   curl -fksS -X POST https://localhost:8443/api/v1/secrets/rotation-schedules \
+	   ```sh
+	   cat > connector-rotation.json <<'JSON'
+	   {"provider":"connector:ci","key":"db/password","old_ref":"version:2","remote_key":"DB_PASSWORD"}
+	   JSON
+	   trstctl-cli --idempotency-key rotate-db-password-ci secrets rotations run -f connector-rotation.json
+	   ```
+
+	   -> a connector-backed rotation writes a new native-store secret version and pushes
+	   it through the configured secret-sync target. If connector delivery fails, trstctl
+	   restores the prior `version:<n>` and records rollback evidence without logging the
+	   secret value.
+
+	   ```sh
+	   cat > dynamic-rotation.json <<'JSON'
+	   {"provider":"dynamic-lease:postgresql","key":"readonly","old_ref":"lease-abc","target":"ci","remote_key":"DB_READONLY_DSN","ttl_seconds":600}
+	   JSON
+	   trstctl-cli --idempotency-key rotate-readonly-lease secrets rotations run -f dynamic-rotation.json
+	   ```
+
+	   -> a dynamic-lease rotation issues a replacement lease, hands the one-time
+	   credential to the configured connector target, and revokes the old lease after
+	   cutover. The rotation response stays metadata-only.
+
+	   ```sh
+	   curl -fksS -X POST https://localhost:8443/api/v1/secrets/rotation-schedules \
      -H "Authorization: Bearer $TRSTCTL_TOKEN" \
      -H "Idempotency-Key: $(uuidgen)" \
      -H 'Content-Type: application/json' \

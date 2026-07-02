@@ -3672,6 +3672,9 @@ export interface SecretRotationRequest {
   key: string;
   old_ref: string;
   provider: string;
+  remote_key?: string;
+  target?: string;
+  ttl_seconds?: number;
 }
 
 export interface SecretRotationSchedule {

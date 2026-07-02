@@ -681,9 +681,10 @@ writing a new token file and restarting the control plane so the new hash is loa
     `postgresql`, `mysql`, `mongodb`, `aws-iam`, `gcp-iam`, `azure-entra`,
     `kubernetes`, and `redis`; operators still have to provide the target connection
     and cloud credentials for the providers they expose;
-  - **static secret rotation** (F37) backs `POST /api/v1/secrets/rotations` — the
-    running control plane drives the four-phase stage, cutover, verify, retire flow
-    through concrete PostgreSQL, MySQL, and AWS IAM rotators. A failed cutover or
+  - **secret rotation** (F37) backs `POST /api/v1/secrets/rotations` — the running
+    control plane drives the four-phase stage, cutover, verify, retire flow through
+    concrete PostgreSQL, MySQL, and AWS IAM rotators, `connector:<target>` secret-sync
+    handoffs, and `dynamic-lease:<provider>` replacement leases. A failed cutover or
     verification returns rollback metadata only, restores the previous consumer
     pointer when possible, and revokes the staged backend credential without returning
     secret material;

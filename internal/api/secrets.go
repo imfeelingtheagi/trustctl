@@ -406,9 +406,12 @@ type secretRecoverRequest struct {
 }
 
 type secretRotationRequest struct {
-	Provider string `json:"provider"`
-	Key      string `json:"key"`
-	OldRef   string `json:"old_ref"`
+	Provider   string `json:"provider"`
+	Key        string `json:"key"`
+	OldRef     string `json:"old_ref"`
+	Target     string `json:"target,omitempty"`
+	RemoteKey  string `json:"remote_key,omitempty"`
+	TTLSeconds int    `json:"ttl_seconds,omitempty"`
 }
 
 type secretRotationResponse struct {
@@ -881,12 +884,7 @@ func (a *API) rotateStaticSecret(w http.ResponseWriter, r *http.Request) {
 		if req.Provider == "" || req.Key == "" || req.OldRef == "" {
 			return 0, nil, errStatus(http.StatusBadRequest, "provider, key, and old_ref are required")
 		}
-		rotator := a.secrets.be.SecretRotators[req.Provider]
-		if rotator == nil {
-			return 0, nil, errStatus(http.StatusServiceUnavailable, "secret rotation provider is not configured")
-		}
-		engine := rotation.New(tenantID, rotator, a.secrets.be.Audit)
-		rep, err := engine.Rotate(ctx, req.Key, req.OldRef)
+		rep, err := a.executeSecretRotation(ctx, tenantID, req)
 		resp := toSecretRotationResponse(rep)
 		if err != nil {
 			resp.Error = err.Error()
@@ -927,8 +925,8 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 		if req.IntervalSeconds <= 0 {
 			return 0, nil, errStatus(http.StatusBadRequest, "interval_seconds must be greater than zero")
 		}
-		if a.secrets.be.SecretRotators[provider] == nil {
-			return 0, nil, errStatus(http.StatusServiceUnavailable, "secret rotation provider is not configured")
+		if _, err := a.secretRotatorFor(ctx, tenantID, secretRotationRequest{Provider: provider, Key: key, OldRef: oldRef}); err != nil {
+			return 0, nil, err
 		}
 		enabled := true
 		if req.Enabled != nil {
@@ -1013,23 +1011,19 @@ func (a *API) runSecretRotationSchedule(ctx context.Context, tenantID string, sc
 	report := rotation.Report{Key: sched.Key, OldRef: sched.OldRef}
 	status := "failed"
 	errText := ""
-	rotator := a.secrets.be.SecretRotators[sched.Provider]
-	if rotator == nil {
-		errText = "secret rotation provider is not configured"
-	} else {
-		engine := rotation.New(tenantID, rotator, a.secrets.be.Audit)
-		rep, err := engine.Rotate(ctx, sched.Key, sched.OldRef)
-		report = rep
-		if err != nil {
-			errText = err.Error()
-			if rep.RollbackFailed {
-				status = "rollback_failed"
-			} else if rep.RollbackAttempted && rep.RolledBack {
-				status = "rolled_back"
-			}
-		} else if rep.Completed {
-			status = "completed"
+	rep, err := a.executeSecretRotation(ctx, tenantID, secretRotationRequest{
+		Provider: sched.Provider, Key: sched.Key, OldRef: sched.OldRef,
+	})
+	report = rep
+	if err != nil {
+		errText = err.Error()
+		if rep.RollbackFailed {
+			status = "rollback_failed"
+		} else if rep.RollbackAttempted && rep.RolledBack {
+			status = "rolled_back"
 		}
+	} else if rep.Completed {
+		status = "completed"
 	}
 	rotationResp := toSecretRotationResponse(report)
 	rotationResp.Error = errText
@@ -1046,6 +1040,413 @@ func (a *API) runSecretRotationSchedule(ctx context.Context, tenantID string, sc
 		ScheduleID: sched.ID, RunID: run.RunID, Status: status,
 		Rotation: rotationResp, Error: errText, RanAt: run.RanAt,
 	}, nil
+}
+
+const (
+	secretConnectorRotationPrefix    = "connector:"
+	secretDynamicLeaseRotationPrefix = "dynamic-lease:"
+	defaultDynamicLeaseRotationTTL   = time.Hour
+)
+
+func (a *API) executeSecretRotation(ctx context.Context, tenantID string, req secretRotationRequest) (rotation.Report, error) {
+	rotator, err := a.secretRotatorFor(ctx, tenantID, req)
+	if err != nil {
+		return rotation.Report{Key: strings.TrimSpace(req.Key), OldRef: strings.TrimSpace(req.OldRef)}, err
+	}
+	engine := rotation.New(tenantID, rotator, a.secrets.be.Audit)
+	return engine.Rotate(ctx, strings.TrimSpace(req.Key), strings.TrimSpace(req.OldRef))
+}
+
+func (a *API) secretRotatorFor(ctx context.Context, tenantID string, req secretRotationRequest) (rotation.Rotator, error) {
+	provider := strings.TrimSpace(req.Provider)
+	key := strings.TrimSpace(req.Key)
+	oldRef := strings.TrimSpace(req.OldRef)
+	if provider == "" || key == "" || oldRef == "" {
+		return nil, errStatus(http.StatusBadRequest, "provider, key, and old_ref are required")
+	}
+	if rotator := a.secrets.be.SecretRotators[provider]; rotator != nil {
+		return rotator, nil
+	}
+	if strings.HasPrefix(provider, secretConnectorRotationPrefix) || provider == "connector" {
+		targetID := strings.TrimSpace(req.Target)
+		if strings.HasPrefix(provider, secretConnectorRotationPrefix) {
+			targetID = strings.TrimSpace(strings.TrimPrefix(provider, secretConnectorRotationPrefix))
+		}
+		return a.connectorSecretRotator(tenantID, targetID, req.RemoteKey)
+	}
+	if strings.HasPrefix(provider, secretDynamicLeaseRotationPrefix) {
+		dynamicProvider := strings.TrimSpace(strings.TrimPrefix(provider, secretDynamicLeaseRotationPrefix))
+		return a.dynamicLeaseSecretRotator(ctx, tenantID, dynamicProvider, req)
+	}
+	return nil, errStatus(http.StatusServiceUnavailable, "secret rotation provider is not configured")
+}
+
+func (a *API) connectorSecretRotator(tenantID, targetID, remoteKey string) (rotation.Rotator, error) {
+	targetID = strings.TrimSpace(targetID)
+	if targetID == "" {
+		return nil, errStatus(http.StatusBadRequest, "connector rotation target is required")
+	}
+	target := a.secrets.be.SecretSyncTargets[targetID]
+	if target == nil {
+		return nil, errStatus(http.StatusServiceUnavailable, "secret sync target is not configured")
+	}
+	if a.secrets.be.SecretSyncOutbox == nil {
+		return nil, errStatus(http.StatusServiceUnavailable, "secret sync outbox is not configured")
+	}
+	return &connectorSecretRotator{
+		api: a, tenantID: tenantID, targetID: targetID, target: target,
+		remoteKey: strings.TrimSpace(remoteKey), staged: map[string]*connectorRotationState{},
+	}, nil
+}
+
+func (a *API) dynamicLeaseSecretRotator(ctx context.Context, tenantID, provider string, req secretRotationRequest) (rotation.Rotator, error) {
+	if provider == "" {
+		return nil, errStatus(http.StatusBadRequest, "dynamic-lease rotation provider is required")
+	}
+	targetID := strings.TrimSpace(req.Target)
+	if targetID == "" {
+		return nil, errStatus(http.StatusBadRequest, "target is required for dynamic-lease rotation")
+	}
+	target := a.secrets.be.SecretSyncTargets[targetID]
+	if target == nil {
+		return nil, errStatus(http.StatusServiceUnavailable, "secret sync target is not configured")
+	}
+	if a.secrets.be.SecretSyncOutbox == nil {
+		return nil, errStatus(http.StatusServiceUnavailable, "secret sync outbox is not configured")
+	}
+	engine, err := a.secrets.dynamicLeaseEngine(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	ttl := defaultDynamicLeaseRotationTTL
+	if req.TTLSeconds > 0 {
+		ttl = time.Duration(req.TTLSeconds) * time.Second
+	}
+	return &dynamicLeaseRotationRotator{
+		api: a, tenantID: tenantID, provider: provider, targetID: targetID,
+		target: target, remoteKey: strings.TrimSpace(req.RemoteKey), ttl: ttl,
+		engine: engine, staged: map[string]*dynamicLeaseRotationState{},
+	}, nil
+}
+
+type connectorSecretRotator struct {
+	api       *API
+	tenantID  string
+	targetID  string
+	target    *secretsync.Target
+	remoteKey string
+
+	mu     sync.Mutex
+	staged map[string]*connectorRotationState
+}
+
+type connectorRotationState struct {
+	newRef     string
+	newValue   []byte
+	oldVersion int
+}
+
+func (r *connectorSecretRotator) Stage(ctx context.Context, key string) (string, error) {
+	rec, err := r.api.secrets.be.Store.GetSecret(ctx, r.tenantID, key)
+	if err != nil {
+		if errors.Is(err, store.ErrSecretNotFound) {
+			return "", errStatus(http.StatusNotFound, "no such secret")
+		}
+		return "", err
+	}
+	raw, err := crypto.RandomBytes(32)
+	if err != nil {
+		return "", err
+	}
+	value := []byte("rotated-" + hex.EncodeToString(raw))
+	secret.Wipe(raw)
+	state := &connectorRotationState{
+		newRef:     fmt.Sprintf("version:%d", rec.Version+1),
+		newValue:   value,
+		oldVersion: rec.Version,
+	}
+	r.mu.Lock()
+	if old := r.staged[key]; old != nil {
+		old.destroy()
+	}
+	r.staged[key] = state
+	r.mu.Unlock()
+	return state.newRef, nil
+}
+
+func (r *connectorSecretRotator) Cutover(ctx context.Context, key, newRef string) error {
+	state := r.stagedFor(key, newRef)
+	if state == nil {
+		return rotation.ErrCredentialNotFound
+	}
+	sealed, err := seal.Seal(r.api.secrets.be.KEK, state.newValue, sealAAD(r.tenantID, key))
+	if err != nil {
+		return err
+	}
+	rec, err := r.api.secrets.be.Store.RotateSecret(ctx, r.tenantID, key, sealed)
+	if err != nil {
+		return err
+	}
+	if got := fmt.Sprintf("version:%d", rec.Version); got != newRef {
+		return fmt.Errorf("rotation: connector version advanced to %s, want %s", got, newRef)
+	}
+	r.api.auditSecretVersion(ctx, r.tenantID, rec, nil)
+	r.api.auditSecret(ctx, "secret.rotated", r.tenantID, rec.Name, rec.Version)
+	remoteKey := r.remoteKeyFor(key)
+	delivered, err := r.api.syncRotationCredential(ctx, r.tenantID, r.targetID, remoteKey, r.target, state.newValue)
+	if err != nil {
+		return err
+	}
+	if delivered == 0 {
+		return errors.New("rotation: connector delivery did not complete")
+	}
+	_ = auditsink.Emit(ctx, r.api.secrets.be.Audit, nil, "secret.rotation.connector_cutover", r.tenantID,
+		[]byte(fmt.Sprintf(`{"key":%q,"target":%q,"new_ref":%q}`, key, r.targetID, newRef)))
+	return nil
+}
+
+func (r *connectorSecretRotator) Verify(context.Context, string) error { return nil }
+
+func (r *connectorSecretRotator) Retire(_ context.Context, key, _ string) error {
+	r.cleanup(key)
+	return nil
+}
+
+func (r *connectorSecretRotator) Rollback(ctx context.Context, key, oldRef string) error {
+	version, err := parseSecretVersionRef(oldRef)
+	if err != nil {
+		r.cleanup(key)
+		return err
+	}
+	rec, err := r.api.secrets.be.Store.GetSecretVersion(ctx, r.tenantID, key, version)
+	if err != nil {
+		r.cleanup(key)
+		return err
+	}
+	value, err := seal.Open(r.api.secrets.be.KEK, rec.Sealed, sealAAD(r.tenantID, key))
+	if err != nil {
+		r.cleanup(key)
+		return err
+	}
+	defer secret.Wipe(value)
+	sealed, err := seal.Seal(r.api.secrets.be.KEK, value, sealAAD(r.tenantID, key))
+	if err != nil {
+		r.cleanup(key)
+		return err
+	}
+	restored, err := r.api.secrets.be.Store.RotateSecret(ctx, r.tenantID, key, sealed)
+	if err != nil {
+		r.cleanup(key)
+		return err
+	}
+	r.api.auditSecretVersion(ctx, r.tenantID, restored, &version)
+	r.api.auditSecret(ctx, "secret.recovered", r.tenantID, restored.Name, restored.Version)
+	remoteKey := r.remoteKeyFor(key)
+	delivered, err := r.api.syncRotationCredential(ctx, r.tenantID, r.targetID, remoteKey, r.target, value)
+	r.cleanup(key)
+	if err != nil {
+		return err
+	}
+	if delivered == 0 {
+		return errors.New("rotation: connector rollback delivery did not complete")
+	}
+	_ = auditsink.Emit(ctx, r.api.secrets.be.Audit, nil, "secret.rotation.connector_rolled_back", r.tenantID,
+		[]byte(fmt.Sprintf(`{"key":%q,"target":%q,"old_ref":%q}`, key, r.targetID, oldRef)))
+	return nil
+}
+
+func (r *connectorSecretRotator) stagedFor(key, ref string) *connectorRotationState {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	state := r.staged[key]
+	if state == nil {
+		return nil
+	}
+	if ref != "" && state.newRef != ref {
+		return nil
+	}
+	return state
+}
+
+func (r *connectorSecretRotator) cleanup(key string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if state := r.staged[key]; state != nil {
+		state.destroy()
+		delete(r.staged, key)
+	}
+}
+
+func (r *connectorSecretRotator) remoteKeyFor(key string) string {
+	if r.remoteKey != "" {
+		return r.remoteKey
+	}
+	return key
+}
+
+func (s *connectorRotationState) destroy() {
+	secret.Wipe(s.newValue)
+	s.newValue = nil
+}
+
+type dynamicLeaseRotationRotator struct {
+	api       *API
+	tenantID  string
+	provider  string
+	targetID  string
+	target    *secretsync.Target
+	remoteKey string
+	ttl       time.Duration
+	engine    *dynsecret.Engine
+
+	mu     sync.Mutex
+	staged map[string]*dynamicLeaseRotationState
+}
+
+type dynamicLeaseRotationState struct {
+	newLeaseID string
+	credential []byte
+}
+
+func (r *dynamicLeaseRotationRotator) Stage(ctx context.Context, key string) (string, error) {
+	lease, credential, err := r.engine.Issue(ctx, r.provider, key, r.ttl, "")
+	if err != nil {
+		return "", dynamicLeaseError(err)
+	}
+	state := &dynamicLeaseRotationState{newLeaseID: lease.ID, credential: credential}
+	r.mu.Lock()
+	if old := r.staged[key]; old != nil {
+		old.destroy()
+	}
+	r.staged[key] = state
+	r.mu.Unlock()
+	return lease.ID, nil
+}
+
+func (r *dynamicLeaseRotationRotator) Cutover(ctx context.Context, key, newRef string) error {
+	state := r.stagedFor(key, newRef)
+	if state == nil {
+		return rotation.ErrCredentialNotFound
+	}
+	remoteKey := r.remoteKeyFor(key)
+	delivered, err := r.api.syncRotationCredential(ctx, r.tenantID, r.targetID, remoteKey, r.target, state.credential)
+	if err != nil {
+		return err
+	}
+	if delivered == 0 {
+		return errors.New("rotation: dynamic lease connector delivery did not complete")
+	}
+	_ = auditsink.Emit(ctx, r.api.secrets.be.Audit, nil, "secret.rotation.dynamic_cutover", r.tenantID,
+		[]byte(fmt.Sprintf(`{"role":%q,"provider":%q,"target":%q,"new_ref":%q}`, key, r.provider, r.targetID, newRef)))
+	return nil
+}
+
+func (r *dynamicLeaseRotationRotator) Verify(context.Context, string) error { return nil }
+
+func (r *dynamicLeaseRotationRotator) Retire(ctx context.Context, key, oldRef string) error {
+	if err := r.engine.Revoke(ctx, oldRef); err != nil {
+		return dynamicLeaseError(err)
+	}
+	if _, err := r.engine.RunRevocations(ctx); err != nil {
+		return err
+	}
+	r.cleanup(key)
+	return nil
+}
+
+func (r *dynamicLeaseRotationRotator) Rollback(ctx context.Context, key, _ string) error {
+	state := r.stagedFor(key, "")
+	if state == nil {
+		return rotation.ErrCredentialNotFound
+	}
+	err := r.engine.Revoke(ctx, state.newLeaseID)
+	if err == nil {
+		_, err = r.engine.RunRevocations(ctx)
+	}
+	r.cleanup(key)
+	return dynamicLeaseError(err)
+}
+
+func (r *dynamicLeaseRotationRotator) stagedFor(key, ref string) *dynamicLeaseRotationState {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	state := r.staged[key]
+	if state == nil {
+		return nil
+	}
+	if ref != "" && state.newLeaseID != ref {
+		return nil
+	}
+	return state
+}
+
+func (r *dynamicLeaseRotationRotator) cleanup(key string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if state := r.staged[key]; state != nil {
+		state.destroy()
+		delete(r.staged, key)
+	}
+}
+
+func (r *dynamicLeaseRotationRotator) remoteKeyFor(key string) string {
+	if r.remoteKey != "" {
+		return r.remoteKey
+	}
+	return key
+}
+
+func (s *dynamicLeaseRotationState) destroy() {
+	secret.Wipe(s.credential)
+	s.credential = nil
+}
+
+func (a *API) syncRotationCredential(ctx context.Context, tenantID, targetID, remoteKey string, target *secretsync.Target, value []byte) (int, error) {
+	valueCopy := append([]byte(nil), value...)
+	defer secret.Wipe(valueCopy)
+	outbox := &rotationTrackingOutbox{Outbox: a.secrets.be.SecretSyncOutbox(tenantID, targetID)}
+	engine := secretsync.New(tenantID, target, outbox, a.secrets.be.Audit)
+	if err := engine.Sync(ctx, remoteKey, valueCopy); err != nil {
+		return 0, err
+	}
+	delivered, err := engine.RunDeliveries(ctx)
+	if delivered == 0 {
+		for _, id := range outbox.ids() {
+			_ = outbox.Outbox.Done(ctx, id)
+		}
+	}
+	return delivered, err
+}
+
+func parseSecretVersionRef(ref string) (int, error) {
+	const prefix = "version:"
+	if !strings.HasPrefix(ref, prefix) {
+		return 0, errStatus(http.StatusBadRequest, "connector rotation old_ref must be version:<n>")
+	}
+	version, err := strconv.Atoi(strings.TrimPrefix(ref, prefix))
+	if err != nil || version <= 0 {
+		return 0, errStatus(http.StatusBadRequest, "connector rotation old_ref must be version:<n>")
+	}
+	return version, nil
+}
+
+type rotationTrackingOutbox struct {
+	secretsync.Outbox
+	mu       sync.Mutex
+	enqueued []string
+}
+
+func (o *rotationTrackingOutbox) Enqueue(ctx context.Context, item secretsync.SyncItem) error {
+	o.mu.Lock()
+	o.enqueued = append(o.enqueued, item.ID)
+	o.mu.Unlock()
+	return o.Outbox.Enqueue(ctx, item)
+}
+
+func (o *rotationTrackingOutbox) ids() []string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return append([]string(nil), o.enqueued...)
 }
 
 // syncSecret pushes a stored secret to a configured external target. The secret value

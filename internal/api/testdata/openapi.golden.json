@@ -14167,6 +14167,15 @@
           },
           "provider": {
             "type": "string"
+          },
+          "remote_key": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
           }
         },
         "required": [
@@ -29543,7 +29552,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Run a rollback-safe static secret rotation",
+        "summary": "Run a rollback-safe static, connector, or dynamic-lease secret rotation",
         "x-trstctl-permission": "secrets:write"
       }
     },

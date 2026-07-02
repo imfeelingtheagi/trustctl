@@ -3,11 +3,13 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,7 +17,9 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/rotation"
+	"trstctl.com/trstctl/internal/secretsync"
 )
 
 // TestServedStaticSecretRotationPostgresCutoverAndRollback is the SEC-05 proof:
@@ -212,6 +216,133 @@ func TestServedScheduledSecretRotationRunsDueDualPhase(t *testing.T) {
 	}
 }
 
+// TestServedSecretRotationCoversConnectorAndDynamicBackendsTRACE008 proves F37 is
+// served beyond the native/static path: the same /api/v1/secrets/rotations endpoint
+// rotates a connector-backed stored secret with rollback, and rotates a dynamic
+// lease by issuing a replacement credential, delivering it to a configured connector,
+// and revoking the old backend lease. Responses and event payloads stay metadata-only.
+func TestServedSecretRotationCoversConnectorAndDynamicBackendsTRACE008(t *testing.T) {
+	connector := newRotationCapturePusher()
+	dynamicBackend := newRotationDynamicBackend()
+	dynamicProvider := dynsecret.NewProvider("postgresql", dynamicBackend)
+
+	h := newServedHarness(t, config.Protocols{},
+		withSecretsEnabled(t, nil),
+		func(d *Deps) {
+			d.DynamicSecretProviders = []dynsecret.Provider{dynamicProvider}
+			d.SecretSyncTargets = map[string]*secretsync.Target{
+				"ci": secretsync.NewCITarget(connector),
+			}
+		},
+	)
+	tok := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write")
+
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok,
+		map[string]any{"name": "rotation/connector", "value": "connector-v1"})
+	if status != http.StatusCreated {
+		t.Fatalf("create connector source secret: status %d body %s", status, body)
+	}
+	connector.put("rotation/connector", []byte("connector-v1"))
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/rotations", tok,
+		map[string]any{"provider": "connector:ci", "key": "rotation/connector", "old_ref": "version:1"})
+	if status != http.StatusOK {
+		t.Fatalf("connector rotation: status %d body %s", status, body)
+	}
+	var connectorRotated secretRotationValue
+	if err := json.Unmarshal(body, &connectorRotated); err != nil {
+		t.Fatalf("decode connector rotation: %v (%s)", err, body)
+	}
+	if !connectorRotated.Completed || connectorRotated.NewRef != "version:2" {
+		t.Fatalf("connector rotation = %+v, want completed version:2", connectorRotated)
+	}
+	connectorValue := connector.value("rotation/connector")
+	if connectorValue == "" || connectorValue == "connector-v1" {
+		t.Fatalf("connector target value = %q, want a rotated value", connectorValue)
+	}
+	if strings.Contains(string(body), connectorValue) || h.logContains(t, connectorValue) || h.logContains(t, "connector-v1") {
+		t.Fatal("connector rotation leaked secret material in response or event log")
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/store", tok,
+		map[string]any{"name": "rotation/rollback", "value": "connector-rollback-v1"})
+	if status != http.StatusCreated {
+		t.Fatalf("create rollback source secret: status %d body %s", status, body)
+	}
+	connector.put("rotation/rollback", []byte("connector-rollback-v1"))
+	connector.failNext("rotation/rollback")
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/rotations", tok,
+		map[string]any{"provider": "connector:ci", "key": "rotation/rollback", "old_ref": "version:1"})
+	if status != http.StatusConflict {
+		t.Fatalf("connector rollback rotation: status %d body %s", status, body)
+	}
+	var connectorRolledBack secretRotationValue
+	if err := json.Unmarshal(body, &connectorRolledBack); err != nil {
+		t.Fatalf("decode connector rollback: %v (%s)", err, body)
+	}
+	if !connectorRolledBack.RollbackAttempted || !connectorRolledBack.RolledBack || connectorRolledBack.RollbackFailed || connectorRolledBack.FailedPhase != "cutover" {
+		t.Fatalf("connector rollback = %+v, want successful rollback from cutover", connectorRolledBack)
+	}
+	if got := connector.value("rotation/rollback"); got != "connector-rollback-v1" {
+		t.Fatalf("connector rollback target value = %q, want old value restored", got)
+	}
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/leases", tok,
+		map[string]any{"provider": "postgresql", "role": "readonly", "ttl_seconds": 600})
+	if status != http.StatusCreated {
+		t.Fatalf("issue initial dynamic lease: status %d body %s", status, body)
+	}
+	var initialLease dynamicLeaseValue
+	if err := json.Unmarshal(body, &initialLease); err != nil {
+		t.Fatalf("decode initial dynamic lease: %v (%s)", err, body)
+	}
+	if initialLease.ID == "" || initialLease.Credential == "" {
+		t.Fatalf("initial lease = %+v, want one-time credential", initialLease)
+	}
+	connector.put("dynamic/readonly", []byte(initialLease.Credential))
+
+	status, body = secretsReq(t, h, http.MethodPost, "/api/v1/secrets/rotations", tok,
+		map[string]any{
+			"provider":    "dynamic-lease:postgresql",
+			"key":         "readonly",
+			"old_ref":     initialLease.ID,
+			"target":      "ci",
+			"remote_key":  "dynamic/readonly",
+			"ttl_seconds": 600,
+		})
+	if status != http.StatusOK {
+		t.Fatalf("dynamic lease rotation: status %d body %s", status, body)
+	}
+	var dynamicRotated secretRotationValue
+	if err := json.Unmarshal(body, &dynamicRotated); err != nil {
+		t.Fatalf("decode dynamic rotation: %v (%s)", err, body)
+	}
+	if !dynamicRotated.Completed || dynamicRotated.NewRef == "" || dynamicRotated.NewRef == initialLease.ID {
+		t.Fatalf("dynamic rotation = %+v, want completed replacement lease", dynamicRotated)
+	}
+	dynamicValue := connector.value("dynamic/readonly")
+	if dynamicValue == "" || dynamicValue == initialLease.Credential {
+		t.Fatalf("dynamic connector value = %q, want replacement credential", dynamicValue)
+	}
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/secrets/leases/"+initialLease.ID, tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get rotated old dynamic lease: status %d body %s", status, body)
+	}
+	var oldLease dynamicLeaseValue
+	if err := json.Unmarshal(body, &oldLease); err != nil {
+		t.Fatalf("decode rotated old dynamic lease: %v (%s)", err, body)
+	}
+	if oldLease.State != "revoked" || dynamicBackend.revokedCount() == 0 {
+		t.Fatalf("old dynamic lease state=%q backend revoked count=%d, want revoked with backend revoke", oldLease.State, dynamicBackend.revokedCount())
+	}
+	if strings.Contains(string(body), dynamicValue) || h.logContains(t, dynamicValue) || h.logContains(t, initialLease.Credential) {
+		t.Fatal("dynamic rotation leaked credential material in response or event log")
+	}
+	if !h.hasEvent(t, "secret.rotation.completed") || !h.hasEvent(t, "rotation.rolled_back") || !h.hasEvent(t, "dynsecret.lease.revoked") {
+		t.Fatal("rotation audit evidence missing for connector/dynamic backends")
+	}
+}
+
 type secretRotationValue struct {
 	Key               string `json:"key"`
 	OldRef            string `json:"old_ref"`
@@ -244,6 +375,82 @@ type secretRotationScheduleRunValue struct {
 	ScheduleID string              `json:"schedule_id"`
 	Status     string              `json:"status"`
 	Rotation   secretRotationValue `json:"rotation"`
+}
+
+type dynamicLeaseValue struct {
+	ID         string `json:"id"`
+	State      string `json:"state"`
+	Credential string `json:"credential,omitempty"`
+}
+
+type rotationCapturePusher struct {
+	mu       sync.Mutex
+	values   map[string][]byte
+	failOnce map[string]bool
+}
+
+func newRotationCapturePusher() *rotationCapturePusher {
+	return &rotationCapturePusher{values: map[string][]byte{}, failOnce: map[string]bool{}}
+}
+
+func (p *rotationCapturePusher) Push(_ context.Context, key string, value []byte) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.failOnce[key] {
+		delete(p.failOnce, key)
+		return errors.New("connector rejected rotated secret")
+	}
+	p.values[key] = append([]byte(nil), value...)
+	return nil
+}
+
+func (p *rotationCapturePusher) put(key string, value []byte) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.values[key] = append([]byte(nil), value...)
+}
+
+func (p *rotationCapturePusher) failNext(key string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.failOnce[key] = true
+}
+
+func (p *rotationCapturePusher) value(key string) string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return string(p.values[key])
+}
+
+type rotationDynamicBackend struct {
+	mu          sync.Mutex
+	issued      int
+	revokedRefs map[string]bool
+}
+
+func newRotationDynamicBackend() *rotationDynamicBackend {
+	return &rotationDynamicBackend{revokedRefs: map[string]bool{}}
+}
+
+func (b *rotationDynamicBackend) Create(_ context.Context, role string) (string, []byte, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.issued++
+	ref := fmt.Sprintf("lease-%s-%d", role, b.issued)
+	return ref, []byte(fmt.Sprintf("dynamic-secret-%d", b.issued)), nil
+}
+
+func (b *rotationDynamicBackend) Revoke(_ context.Context, ref string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.revokedRefs[ref] = true
+	return nil
+}
+
+func (b *rotationDynamicBackend) revokedCount() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.revokedRefs)
 }
 
 func startRotationPostgres(t *testing.T) (string, func()) {

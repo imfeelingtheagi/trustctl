@@ -5180,6 +5180,9 @@ SecretRotationRequest = TypedDict(
         'key': str,
         'old_ref': str,
         'provider': str,
+        'remote_key': str,
+        'target': str,
+        'ttl_seconds': int,
     },
     total=False,
 )

@@ -2619,6 +2619,7 @@ func componentSchemas() map[string]*Schema {
 	}, "provider", "role", "ttl_seconds")
 	secretRotationReq := object(map[string]*Schema{
 		"provider": str(), "key": str(), "old_ref": str(),
+		"target": str(), "remote_key": str(), "ttl_seconds": {Type: "integer"},
 	}, "provider", "key", "old_ref")
 	secretRotation := object(map[string]*Schema{
 		"key": str(), "old_ref": str(), "new_ref": str(),

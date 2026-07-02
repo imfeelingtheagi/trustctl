@@ -218,6 +218,17 @@ rolled-back flags, and failure phase). The scheduled path records tenant cadence
 stage/cutover/verify/retire engine and advance `old_ref` only after a completed
 rotation, so the next run retires the version that just became old.
 
+The same served endpoint now accepts three backend classes:
+
+- Static providers such as `postgresql`, `mysql`, and `aws-iam` rotate a long-lived
+  backend credential and publish it to the configured consumer pointer.
+- `connector:<target>` rotates a native-store secret version, pushes the new value
+  through the configured secret-sync outbox target, and restores the prior
+  `old_ref` (`version:<n>`) if connector delivery fails.
+- `dynamic-lease:<provider>` issues a replacement dynamic lease for `key` (the role),
+  delivers the one-time credential to `target`/`remote_key`, then revokes the old
+  lease named in `old_ref`. The rotation response never returns the credential.
+
 PostgreSQL, MySQL, and AWS IAM rotators ship as concrete backends. PostgreSQL is
 verified against a real database process: stage creates a new login, cutover publishes
 the new credential to the configured consumer pointer, verify logs in with it, retire
@@ -569,7 +580,8 @@ trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.
 ## Pitfalls & limits
 
 - **Serving status:** the secret store, rollback-safe static secret rotations,
-  scheduled dual-phase secret rotations, dynamic secret leases, one-time sharing,
+  connector-backed rotations, dynamic-lease handoff rotations, scheduled dual-phase
+  secret rotations, dynamic secret leases, one-time sharing,
   the dynamic PKI secret, machine login, outbound secret sync, workload injection,
   and Gitleaks secret scanning are **served** on the running control plane
   under `/api/v1/secrets/*` (enable with `secrets.enable_api`, off by default and
@@ -621,7 +633,8 @@ trstctl-cli --idempotency-key ci-secret-scan-1 secrets scans run -f secret-scan.
   fragments, CI-log/container-registry/Slack/Jira artifact ingress, redacted findings
   only.
 - **Events:** `secret.version.written`, `rotation.*`, `rotation.rollback_failed`,
-  `secret.rotation_schedule.upserted`, `secret.rotation_schedule.ran`,
+  `secret.rotation.connector_cutover`, `secret.rotation.connector_rolled_back`,
+  `secret.rotation.dynamic_cutover`, `secret.rotation_schedule.upserted`, `secret.rotation_schedule.ran`,
   `auth.session.issued`, `discovery.finding.recorded`, `discovery.run.completed`.
 
 ## See also

@@ -3094,7 +3094,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Run a rollback-safe static secret rotation */
+        /** Run a rollback-safe static, connector, or dynamic-lease secret rotation */
         post: operations["rotateStaticSecret"];
         delete?: never;
         options?: never;
@@ -7506,6 +7506,9 @@ export interface components {
             key: string;
             old_ref: string;
             provider: string;
+            remote_key?: string;
+            target?: string;
+            ttl_seconds?: number;
         };
         SecretRotationSchedule: {
             /** Format: date-time */

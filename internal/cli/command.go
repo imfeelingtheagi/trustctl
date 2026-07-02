@@ -304,7 +304,7 @@ var commandTable = []Command{
 	{Name: []string{"secrets", "leases", "get"}, Method: "GET", Path: "/api/v1/secrets/leases/{lease_id}", Summary: "Get dynamic secret lease metadata"},
 	{Name: []string{"secrets", "leases", "renew"}, Method: "POST", Path: "/api/v1/secrets/leases/{lease_id}/renew", Body: bodyFile, Summary: "Renew a dynamic secret lease"},
 	{Name: []string{"secrets", "leases", "revoke"}, Method: "POST", Path: "/api/v1/secrets/leases/{lease_id}/revoke", Summary: "Revoke a dynamic secret lease"},
-	{Name: []string{"secrets", "rotations", "run"}, Method: "POST", Path: "/api/v1/secrets/rotations", Body: bodyFile, Summary: "Run a rollback-safe static secret rotation"},
+	{Name: []string{"secrets", "rotations", "run"}, Method: "POST", Path: "/api/v1/secrets/rotations", Body: bodyFile, Summary: "Run a rollback-safe static, connector, or dynamic-lease secret rotation"},
 	{Name: []string{"secrets", "rotation-schedules", "create"}, Method: "POST", Path: "/api/v1/secrets/rotation-schedules", Body: bodyFile, Summary: "Create a scheduled zero-downtime dual-phase secret rotation"},
 	{Name: []string{"secrets", "rotation-schedules", "list"}, Method: "GET", Path: "/api/v1/secrets/rotation-schedules", Query: []string{"limit", "cursor"}, Summary: "List scheduled secret rotations"},
 	{Name: []string{"secrets", "rotation-schedules", "run-due"}, Method: "POST", Path: "/api/v1/secrets/rotation-schedules/run-due", Body: bodyNone, Summary: "Run due scheduled secret rotations"},
