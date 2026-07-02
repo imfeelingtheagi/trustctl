@@ -90,7 +90,7 @@
     {
       "ecosystem": "gomod",
       "name": "github.com/jackc/pgx/v5",
-      "current_version": "v5.9.0",
+      "current_version": "v5.9.2",
       "latest_observed_version": "v5.10.0",
       "update_type": "minor",
       "freshness_slo_class": "critical-go-runtime",
