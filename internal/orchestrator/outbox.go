@@ -588,11 +588,11 @@ func (o *Outbox) reserveHalfOpenProbes(now time.Time) ([]string, map[circuitKey]
 	if o.circuitFailureThreshold <= 0 {
 		return []string{}, nil
 	}
-	blocked := make([]string, 0, len(o.circuits))
-	reserved := make(map[circuitKey]bool)
 	var transitions []CircuitTransition
 
 	o.circuitMu.Lock()
+	blocked := make([]string, 0, len(o.circuits))
+	reserved := make(map[circuitKey]bool)
 	for key, circuit := range o.circuits {
 		switch circuit.state {
 		case CircuitOpen:
