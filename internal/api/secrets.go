@@ -1008,13 +1008,12 @@ func (a *API) runDueSecretRotationSchedules(w http.ResponseWriter, r *http.Reque
 }
 
 func (a *API) runSecretRotationSchedule(ctx context.Context, tenantID string, sched store.SecretRotationSchedule) (secretRotationScheduleRunResponse, error) {
-	report := rotation.Report{Key: sched.Key, OldRef: sched.OldRef}
 	status := "failed"
 	errText := ""
 	rep, err := a.executeSecretRotation(ctx, tenantID, secretRotationRequest{
 		Provider: sched.Provider, Key: sched.Key, OldRef: sched.OldRef,
 	})
-	report = rep
+	report := rep
 	if err != nil {
 		errText = err.Error()
 		if rep.RollbackFailed {
@@ -1412,7 +1411,7 @@ func (a *API) syncRotationCredential(ctx context.Context, tenantID, targetID, re
 	delivered, err := engine.RunDeliveries(ctx)
 	if delivered == 0 {
 		for _, id := range outbox.ids() {
-			_ = outbox.Outbox.Done(ctx, id)
+			_ = outbox.Done(ctx, id)
 		}
 	}
 	return delivered, err

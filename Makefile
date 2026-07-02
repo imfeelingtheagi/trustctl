@@ -257,8 +257,12 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 	@# When it is missing we must NOT pass silently (CODE-005): make lint is the
 	@# full gate and fails closed by default. Developers who explicitly want only
 	@# the cheap local subset must run the intentionally named make lint-partial.
-	@if command -v golangci-lint >/dev/null 2>&1; then \
-		echo ">> golangci-lint"; golangci-lint run $(GO_PACKAGE_DIRS); \
+	@golangci_lint=""; \
+	if command -v golangci-lint >/dev/null 2>&1; then golangci_lint="golangci-lint"; \
+	elif [ -x "$(GO_TOOL_BIN)/golangci-lint" ]; then golangci_lint="$(GO_TOOL_BIN)/golangci-lint"; fi; \
+	if [ -n "$$golangci_lint" ]; then \
+		echo ">> golangci-lint"; \
+		if [ "$$golangci_lint" = "golangci-lint" ]; then golangci-lint run $(GO_PACKAGE_DIRS); else "$$golangci_lint" run $(GO_PACKAGE_DIRS); fi; \
 	elif [ "$${LINT_ALLOW_PARTIAL:-0}" = "1" ]; then \
 		echo "!! ============================================================"; \
 		echo "!! WARNING: golangci-lint NOT installed — SKIPPING it (CODE-005)."; \
@@ -269,8 +273,10 @@ lint: ## Run the full lint gate: gofmt, go vet, architecture lint, golangci-lint
 		echo "FAIL: golangci-lint is not installed, so make lint would skip errcheck/staticcheck/unused. Run 'make tools' or use 'make lint-partial' deliberately." >&2; \
 		exit 1; \
 	fi
-	@if command -v actionlint >/dev/null 2>&1; then \
-		echo ">> actionlint (GitHub Actions workflows)"; actionlint; \
+	@actionlint_bin=$$(command -v actionlint 2>/dev/null || true); \
+	if [ -z "$$actionlint_bin" ] && [ -x "$(GO_TOOL_BIN)/actionlint" ]; then actionlint_bin="$(GO_TOOL_BIN)/actionlint"; fi; \
+	if [ -n "$$actionlint_bin" ]; then \
+		echo ">> actionlint (GitHub Actions workflows)"; "$$actionlint_bin"; \
 	elif [ "$${LINT_ALLOW_PARTIAL:-0}" = "1" ]; then \
 		echo "!! WARNING: actionlint NOT installed — SKIPPING workflow lint (install with: make tools)"; \
 	else \

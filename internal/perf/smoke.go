@@ -352,11 +352,12 @@ func buildInventoryRows(count int) []store.Certificate {
 }
 
 func inventoryOp(source []store.Certificate) operation {
+	rows := append([]store.Certificate(nil), source...)
+	sort.Slice(rows, func(i, j int) bool { return rows[i].ID < rows[j].ID })
+	page := append([]store.Certificate(nil), rows[:128]...)
 	return func() error {
-		rows := append([]store.Certificate(nil), source...)
-		sort.Slice(rows, func(i, j int) bool { return rows[i].ID < rows[j].ID })
-		page := rows[:128]
-		_, err := json.Marshal(page)
+		pageCopy := append([]store.Certificate(nil), page...)
+		_, err := json.Marshal(pageCopy)
 		return err
 	}
 }

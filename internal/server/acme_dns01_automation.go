@@ -304,293 +304,333 @@ func (a *servedACMEDNS01Automation) outboxRecord(ctx context.Context, tenantID, 
 func (a *servedACMEDNS01Automation) providerForPayload(ctx context.Context, tenantID string, payload acmeDNS01OutboxPayload) (acme.DNSProvider, error) {
 	switch payload.Provider {
 	case "route53":
-		var cfg struct {
-			HostedZoneID string `json:"hosted_zone_id"`
-			AccessKeyID  string `json:"access_key_id,omitempty"`
-			Endpoint     string `json:"endpoint,omitempty"`
-		}
-		if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
-			return nil, fmt.Errorf("server: decode route53 dns-01 config: %w", err)
-		}
-		accessKeyID := strings.TrimSpace(cfg.AccessKeyID)
-		if accessKeyID == "" {
-			var err error
-			accessKeyID, err = a.secretRefString(ctx, tenantID, payload.CredentialRefs, "aws_access_key_ref")
-			if err != nil {
-				return nil, err
-			}
-		}
-		secretAccessKey, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "aws_secret_key_ref")
-		if err != nil {
-			return nil, err
-		}
-		defer secret.Wipe(secretAccessKey)
-		sessionToken, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "aws_session_token_ref")
-		if err != nil {
-			return nil, err
-		}
-		defer secret.Wipe(sessionToken)
-		if err := requireACMEDNS01Fields("route53", map[string]string{
-			"hosted_zone_id": cfg.HostedZoneID,
-			"access_key_id":  accessKeyID,
-		}); err != nil {
-			return nil, err
-		}
-		if len(secretAccessKey) == 0 {
-			return nil, errors.New("server: route53 dns-01 credential ref aws_secret_key_ref is required")
-		}
-		opts := []dnsroute53.Option{}
-		if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
-			opts = append(opts, dnsroute53.WithEndpoint(endpoint))
-		}
-		return dnsroute53.New(cfg.HostedZoneID, dnsroute53.Credentials{
-			AccessKeyID: accessKeyID, SecretAccessKey: secretAccessKey, SessionToken: sessionToken,
-		}, opts...), nil
+		return a.route53ProviderForPayload(ctx, tenantID, payload)
 	case "googledns":
-		var cfg struct {
-			Project     string `json:"project"`
-			ManagedZone string `json:"managed_zone"`
-			Endpoint    string `json:"endpoint,omitempty"`
-		}
-		if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
-			return nil, fmt.Errorf("server: decode googledns dns-01 config: %w", err)
-		}
-		token, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "oauth_token_ref")
-		if err != nil {
-			return nil, err
-		}
-		defer secret.Wipe(token)
-		if err := requireACMEDNS01Fields("googledns", map[string]string{"project": cfg.Project, "managed_zone": cfg.ManagedZone}); err != nil {
-			return nil, err
-		}
-		if len(token) == 0 {
-			return nil, errors.New("server: googledns dns-01 credential ref oauth_token_ref is required")
-		}
-		opts := []dnsgoogledns.Option{}
-		if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
-			opts = append(opts, dnsgoogledns.WithEndpoint(endpoint))
-		}
-		return dnsgoogledns.New(cfg.Project, cfg.ManagedZone, dnsgoogledns.Credentials{BearerToken: token}, opts...), nil
+		return a.googleDNSProviderForPayload(ctx, tenantID, payload)
 	case "azuredns":
-		var cfg struct {
-			SubscriptionID string `json:"subscription_id"`
-			ResourceGroup  string `json:"resource_group"`
-			Zone           string `json:"zone,omitempty"`
-			Endpoint       string `json:"endpoint,omitempty"`
-		}
-		if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
-			return nil, fmt.Errorf("server: decode azuredns dns-01 config: %w", err)
-		}
-		if strings.TrimSpace(cfg.Zone) == "" {
-			cfg.Zone = payloadZoneFallback(payload)
-		}
-		token, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "aad_token_ref")
-		if err != nil {
-			return nil, err
-		}
-		defer secret.Wipe(token)
-		if err := requireACMEDNS01Fields("azuredns", map[string]string{"subscription_id": cfg.SubscriptionID, "resource_group": cfg.ResourceGroup, "zone": cfg.Zone}); err != nil {
-			return nil, err
-		}
-		if len(token) == 0 {
-			return nil, errors.New("server: azuredns dns-01 credential ref aad_token_ref is required")
-		}
-		opts := []dnsazuredns.Option{}
-		if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
-			opts = append(opts, dnsazuredns.WithEndpoint(endpoint))
-		}
-		return dnsazuredns.New(cfg.SubscriptionID, cfg.ResourceGroup, cfg.Zone, dnsazuredns.Credentials{BearerToken: token}, opts...), nil
+		return a.azureDNSProviderForPayload(ctx, tenantID, payload)
 	case "cloudflare":
-		var cfg struct {
-			ZoneID   string `json:"zone_id"`
-			Endpoint string `json:"endpoint,omitempty"`
-		}
-		if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
-			return nil, fmt.Errorf("server: decode cloudflare dns-01 config: %w", err)
-		}
-		token, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "api_token_ref")
-		if err != nil {
-			return nil, err
-		}
-		defer secret.Wipe(token)
-		if err := requireACMEDNS01Fields("cloudflare", map[string]string{"zone_id": cfg.ZoneID}); err != nil {
-			return nil, err
-		}
-		if len(token) == 0 {
-			return nil, errors.New("server: cloudflare dns-01 credential ref api_token_ref is required")
-		}
-		opts := []dnscloudflare.Option{}
-		if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
-			opts = append(opts, dnscloudflare.WithEndpoint(endpoint))
-		}
-		return dnscloudflare.New(cfg.ZoneID, dnscloudflare.Credentials{APIToken: token}, opts...), nil
+		return a.cloudflareProviderForPayload(ctx, tenantID, payload)
 	case "rfc2136":
-		var cfg struct {
-			Server      string `json:"server"`
-			Zone        string `json:"zone,omitempty"`
-			TSIGKeyName string `json:"tsig_key_name,omitempty"`
-			TTL         uint32 `json:"ttl,omitempty"`
-		}
-		if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
-			return nil, fmt.Errorf("server: decode rfc2136 dns-01 config: %w", err)
-		}
-		if strings.TrimSpace(cfg.Zone) == "" {
-			cfg.Zone = payloadZoneFallback(payload)
-		}
-		tsigSecret, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "tsig_secret_ref")
-		if err != nil {
-			return nil, err
-		}
-		defer secret.Wipe(tsigSecret)
-		if err := requireACMEDNS01Fields("rfc2136", map[string]string{"server": cfg.Server, "zone": cfg.Zone}); err != nil {
-			return nil, err
-		}
-		opts := []dnsrfc2136.Option{}
-		if cfg.TTL > 0 {
-			opts = append(opts, dnsrfc2136.WithTTL(cfg.TTL))
-		}
-		return dnsrfc2136.New(cfg.Server, cfg.Zone, dnsrfc2136.Credentials{KeyName: cfg.TSIGKeyName, Secret: tsigSecret}, opts...), nil
+		return a.rfc2136ProviderForPayload(ctx, tenantID, payload)
 	case "webhook":
-		var cfg struct {
-			Endpoint string `json:"endpoint"`
-		}
-		if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
-			return nil, fmt.Errorf("server: decode webhook dns-01 config: %w", err)
-		}
-		cfg.Endpoint = strings.TrimSpace(cfg.Endpoint)
-		if cfg.Endpoint == "" {
-			return nil, errors.New("server: webhook dns-01 config requires endpoint")
-		}
-		token, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "bearer_token_ref")
-		if err != nil {
-			return nil, err
-		}
-		provider := dnswebhook.New(cfg.Endpoint, dnswebhook.Credentials{BearerToken: token})
-		secret.Wipe(token)
-		return provider, nil
+		return a.webhookProviderForPayload(ctx, tenantID, payload)
 	case "ns1":
-		var cfg struct {
-			Zone     string `json:"zone,omitempty"`
-			Endpoint string `json:"endpoint,omitempty"`
-		}
-		if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
-			return nil, fmt.Errorf("server: decode ns1 dns-01 config: %w", err)
-		}
-		if strings.TrimSpace(cfg.Zone) == "" {
-			cfg.Zone = payloadZoneFallback(payload)
-		}
-		apiKey, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "api_key_ref")
-		if err != nil {
-			return nil, err
-		}
-		defer secret.Wipe(apiKey)
-		if err := requireACMEDNS01Fields("ns1", map[string]string{"zone": cfg.Zone}); err != nil {
-			return nil, err
-		}
-		if len(apiKey) == 0 {
-			return nil, errors.New("server: ns1 dns-01 credential ref api_key_ref is required")
-		}
-		opts := []dnsns1.Option{}
-		if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
-			opts = append(opts, dnsns1.WithEndpoint(endpoint))
-		}
-		return dnsns1.New(cfg.Zone, dnsns1.Credentials{APIKey: apiKey}, opts...), nil
+		return a.ns1ProviderForPayload(ctx, tenantID, payload)
 	case "akamai":
-		var cfg struct {
-			Zone     string `json:"zone,omitempty"`
-			Endpoint string `json:"endpoint"`
-		}
-		if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
-			return nil, fmt.Errorf("server: decode akamai dns-01 config: %w", err)
-		}
-		if strings.TrimSpace(cfg.Zone) == "" {
-			cfg.Zone = payloadZoneFallback(payload)
-		}
-		clientToken, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "client_token_ref")
-		if err != nil {
-			return nil, err
-		}
-		defer secret.Wipe(clientToken)
-		clientSecret, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "client_secret_ref")
-		if err != nil {
-			return nil, err
-		}
-		defer secret.Wipe(clientSecret)
-		accessToken, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "access_token_ref")
-		if err != nil {
-			return nil, err
-		}
-		defer secret.Wipe(accessToken)
-		if err := requireACMEDNS01Fields("akamai", map[string]string{"zone": cfg.Zone, "endpoint": cfg.Endpoint}); err != nil {
-			return nil, err
-		}
-		if len(clientToken) == 0 || len(clientSecret) == 0 || len(accessToken) == 0 {
-			return nil, errors.New("server: akamai dns-01 credential refs client_token_ref, client_secret_ref, and access_token_ref are required")
-		}
-		return dnsakamai.New(cfg.Zone, dnsakamai.Credentials{
-			ClientToken: clientToken, ClientSecret: clientSecret, AccessToken: accessToken,
-		}, dnsakamai.WithEndpoint(cfg.Endpoint)), nil
+		return a.akamaiProviderForPayload(ctx, tenantID, payload)
 	case "ultradns":
-		var cfg struct {
-			Zone     string `json:"zone,omitempty"`
-			Endpoint string `json:"endpoint,omitempty"`
-		}
-		if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
-			return nil, fmt.Errorf("server: decode ultradns dns-01 config: %w", err)
-		}
-		if strings.TrimSpace(cfg.Zone) == "" {
-			cfg.Zone = payloadZoneFallback(payload)
-		}
-		token, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "bearer_token_ref")
-		if err != nil {
-			return nil, err
-		}
-		defer secret.Wipe(token)
-		if err := requireACMEDNS01Fields("ultradns", map[string]string{"zone": cfg.Zone}); err != nil {
-			return nil, err
-		}
-		if len(token) == 0 {
-			return nil, errors.New("server: ultradns dns-01 credential ref bearer_token_ref is required")
-		}
-		opts := []dnsultradns.Option{}
-		if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
-			opts = append(opts, dnsultradns.WithEndpoint(endpoint))
-		}
-		return dnsultradns.New(cfg.Zone, dnsultradns.Credentials{BearerToken: token}, opts...), nil
+		return a.ultradnsProviderForPayload(ctx, tenantID, payload)
 	case "acmedns":
-		var cfg struct {
-			Subdomain string `json:"subdomain"`
-			Endpoint  string `json:"endpoint,omitempty"`
-		}
-		if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
-			return nil, fmt.Errorf("server: decode acmedns dns-01 config: %w", err)
-		}
-		username, err := a.secretRefString(ctx, tenantID, payload.CredentialRefs, "username_ref")
-		if err != nil {
-			return nil, err
-		}
-		password, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "password_ref")
-		if err != nil {
-			return nil, err
-		}
-		defer secret.Wipe(password)
-		if err := requireACMEDNS01Fields("acmedns", map[string]string{"subdomain": cfg.Subdomain}); err != nil {
-			return nil, err
-		}
-		if username == "" || len(password) == 0 {
-			return nil, errors.New("server: acmedns dns-01 credential refs username_ref and password_ref are required")
-		}
-		opts := []dnsacmedns.Option{}
-		if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
-			opts = append(opts, dnsacmedns.WithEndpoint(endpoint))
-		}
-		return dnsacmedns.New(cfg.Subdomain, dnsacmedns.Credentials{Username: username, Password: password}, opts...), nil
+		return a.acmeDNSProviderForPayload(ctx, tenantID, payload)
 	default:
 		if a.plugins != nil && a.plugins.HasDNS(payload.Provider) {
 			return a.pluginProviderForPayload(ctx, tenantID, payload)
 		}
 		return nil, fmt.Errorf("server: acme dns-01 provider %q is not wired for order-time automation", payload.Provider)
 	}
+}
+
+func (a *servedACMEDNS01Automation) route53ProviderForPayload(ctx context.Context, tenantID string, payload acmeDNS01OutboxPayload) (acme.DNSProvider, error) {
+	var cfg struct {
+		HostedZoneID string `json:"hosted_zone_id"`
+		AccessKeyID  string `json:"access_key_id,omitempty"`
+		Endpoint     string `json:"endpoint,omitempty"`
+	}
+	if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
+		return nil, fmt.Errorf("server: decode route53 dns-01 config: %w", err)
+	}
+	accessKeyID := strings.TrimSpace(cfg.AccessKeyID)
+	if accessKeyID == "" {
+		var err error
+		accessKeyID, err = a.secretRefString(ctx, tenantID, payload.CredentialRefs, "aws_access_key_ref")
+		if err != nil {
+			return nil, err
+		}
+	}
+	secretAccessKey, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "aws_secret_key_ref")
+	if err != nil {
+		return nil, err
+	}
+	defer secret.Wipe(secretAccessKey)
+	sessionToken, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "aws_session_token_ref")
+	if err != nil {
+		return nil, err
+	}
+	defer secret.Wipe(sessionToken)
+	if err := requireACMEDNS01Fields("route53", map[string]string{
+		"hosted_zone_id": cfg.HostedZoneID,
+		"access_key_id":  accessKeyID,
+	}); err != nil {
+		return nil, err
+	}
+	if len(secretAccessKey) == 0 {
+		return nil, errors.New("server: route53 dns-01 credential ref aws_secret_key_ref is required")
+	}
+	opts := []dnsroute53.Option{}
+	if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
+		opts = append(opts, dnsroute53.WithEndpoint(endpoint))
+	}
+	return dnsroute53.New(cfg.HostedZoneID, dnsroute53.Credentials{
+		AccessKeyID: accessKeyID, SecretAccessKey: secretAccessKey, SessionToken: sessionToken,
+	}, opts...), nil
+}
+
+func (a *servedACMEDNS01Automation) googleDNSProviderForPayload(ctx context.Context, tenantID string, payload acmeDNS01OutboxPayload) (acme.DNSProvider, error) {
+	var cfg struct {
+		Project     string `json:"project"`
+		ManagedZone string `json:"managed_zone"`
+		Endpoint    string `json:"endpoint,omitempty"`
+	}
+	if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
+		return nil, fmt.Errorf("server: decode googledns dns-01 config: %w", err)
+	}
+	token, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "oauth_token_ref")
+	if err != nil {
+		return nil, err
+	}
+	defer secret.Wipe(token)
+	if err := requireACMEDNS01Fields("googledns", map[string]string{"project": cfg.Project, "managed_zone": cfg.ManagedZone}); err != nil {
+		return nil, err
+	}
+	if len(token) == 0 {
+		return nil, errors.New("server: googledns dns-01 credential ref oauth_token_ref is required")
+	}
+	opts := []dnsgoogledns.Option{}
+	if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
+		opts = append(opts, dnsgoogledns.WithEndpoint(endpoint))
+	}
+	return dnsgoogledns.New(cfg.Project, cfg.ManagedZone, dnsgoogledns.Credentials{BearerToken: token}, opts...), nil
+}
+
+func (a *servedACMEDNS01Automation) azureDNSProviderForPayload(ctx context.Context, tenantID string, payload acmeDNS01OutboxPayload) (acme.DNSProvider, error) {
+	var cfg struct {
+		SubscriptionID string `json:"subscription_id"`
+		ResourceGroup  string `json:"resource_group"`
+		Zone           string `json:"zone,omitempty"`
+		Endpoint       string `json:"endpoint,omitempty"`
+	}
+	if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
+		return nil, fmt.Errorf("server: decode azuredns dns-01 config: %w", err)
+	}
+	if strings.TrimSpace(cfg.Zone) == "" {
+		cfg.Zone = payloadZoneFallback(payload)
+	}
+	token, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "aad_token_ref")
+	if err != nil {
+		return nil, err
+	}
+	defer secret.Wipe(token)
+	if err := requireACMEDNS01Fields("azuredns", map[string]string{"subscription_id": cfg.SubscriptionID, "resource_group": cfg.ResourceGroup, "zone": cfg.Zone}); err != nil {
+		return nil, err
+	}
+	if len(token) == 0 {
+		return nil, errors.New("server: azuredns dns-01 credential ref aad_token_ref is required")
+	}
+	opts := []dnsazuredns.Option{}
+	if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
+		opts = append(opts, dnsazuredns.WithEndpoint(endpoint))
+	}
+	return dnsazuredns.New(cfg.SubscriptionID, cfg.ResourceGroup, cfg.Zone, dnsazuredns.Credentials{BearerToken: token}, opts...), nil
+}
+
+func (a *servedACMEDNS01Automation) cloudflareProviderForPayload(ctx context.Context, tenantID string, payload acmeDNS01OutboxPayload) (acme.DNSProvider, error) {
+	var cfg struct {
+		ZoneID   string `json:"zone_id"`
+		Endpoint string `json:"endpoint,omitempty"`
+	}
+	if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
+		return nil, fmt.Errorf("server: decode cloudflare dns-01 config: %w", err)
+	}
+	token, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "api_token_ref")
+	if err != nil {
+		return nil, err
+	}
+	defer secret.Wipe(token)
+	if err := requireACMEDNS01Fields("cloudflare", map[string]string{"zone_id": cfg.ZoneID}); err != nil {
+		return nil, err
+	}
+	if len(token) == 0 {
+		return nil, errors.New("server: cloudflare dns-01 credential ref api_token_ref is required")
+	}
+	opts := []dnscloudflare.Option{}
+	if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
+		opts = append(opts, dnscloudflare.WithEndpoint(endpoint))
+	}
+	return dnscloudflare.New(cfg.ZoneID, dnscloudflare.Credentials{APIToken: token}, opts...), nil
+}
+
+func (a *servedACMEDNS01Automation) rfc2136ProviderForPayload(ctx context.Context, tenantID string, payload acmeDNS01OutboxPayload) (acme.DNSProvider, error) {
+	var cfg struct {
+		Server      string `json:"server"`
+		Zone        string `json:"zone,omitempty"`
+		TSIGKeyName string `json:"tsig_key_name,omitempty"`
+		TTL         uint32 `json:"ttl,omitempty"`
+	}
+	if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
+		return nil, fmt.Errorf("server: decode rfc2136 dns-01 config: %w", err)
+	}
+	if strings.TrimSpace(cfg.Zone) == "" {
+		cfg.Zone = payloadZoneFallback(payload)
+	}
+	tsigSecret, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "tsig_secret_ref")
+	if err != nil {
+		return nil, err
+	}
+	defer secret.Wipe(tsigSecret)
+	if err := requireACMEDNS01Fields("rfc2136", map[string]string{"server": cfg.Server, "zone": cfg.Zone}); err != nil {
+		return nil, err
+	}
+	opts := []dnsrfc2136.Option{}
+	if cfg.TTL > 0 {
+		opts = append(opts, dnsrfc2136.WithTTL(cfg.TTL))
+	}
+	return dnsrfc2136.New(cfg.Server, cfg.Zone, dnsrfc2136.Credentials{KeyName: cfg.TSIGKeyName, Secret: tsigSecret}, opts...), nil
+}
+
+func (a *servedACMEDNS01Automation) webhookProviderForPayload(ctx context.Context, tenantID string, payload acmeDNS01OutboxPayload) (acme.DNSProvider, error) {
+	var cfg struct {
+		Endpoint string `json:"endpoint"`
+	}
+	if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
+		return nil, fmt.Errorf("server: decode webhook dns-01 config: %w", err)
+	}
+	cfg.Endpoint = strings.TrimSpace(cfg.Endpoint)
+	if cfg.Endpoint == "" {
+		return nil, errors.New("server: webhook dns-01 config requires endpoint")
+	}
+	token, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "bearer_token_ref")
+	if err != nil {
+		return nil, err
+	}
+	provider := dnswebhook.New(cfg.Endpoint, dnswebhook.Credentials{BearerToken: token})
+	secret.Wipe(token)
+	return provider, nil
+}
+
+func (a *servedACMEDNS01Automation) ns1ProviderForPayload(ctx context.Context, tenantID string, payload acmeDNS01OutboxPayload) (acme.DNSProvider, error) {
+	var cfg struct {
+		Zone     string `json:"zone,omitempty"`
+		Endpoint string `json:"endpoint,omitempty"`
+	}
+	if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
+		return nil, fmt.Errorf("server: decode ns1 dns-01 config: %w", err)
+	}
+	if strings.TrimSpace(cfg.Zone) == "" {
+		cfg.Zone = payloadZoneFallback(payload)
+	}
+	apiKey, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "api_key_ref")
+	if err != nil {
+		return nil, err
+	}
+	defer secret.Wipe(apiKey)
+	if err := requireACMEDNS01Fields("ns1", map[string]string{"zone": cfg.Zone}); err != nil {
+		return nil, err
+	}
+	if len(apiKey) == 0 {
+		return nil, errors.New("server: ns1 dns-01 credential ref api_key_ref is required")
+	}
+	opts := []dnsns1.Option{}
+	if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
+		opts = append(opts, dnsns1.WithEndpoint(endpoint))
+	}
+	return dnsns1.New(cfg.Zone, dnsns1.Credentials{APIKey: apiKey}, opts...), nil
+}
+
+func (a *servedACMEDNS01Automation) akamaiProviderForPayload(ctx context.Context, tenantID string, payload acmeDNS01OutboxPayload) (acme.DNSProvider, error) {
+	var cfg struct {
+		Zone     string `json:"zone,omitempty"`
+		Endpoint string `json:"endpoint"`
+	}
+	if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
+		return nil, fmt.Errorf("server: decode akamai dns-01 config: %w", err)
+	}
+	if strings.TrimSpace(cfg.Zone) == "" {
+		cfg.Zone = payloadZoneFallback(payload)
+	}
+	clientToken, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "client_token_ref")
+	if err != nil {
+		return nil, err
+	}
+	defer secret.Wipe(clientToken)
+	clientSecret, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "client_secret_ref")
+	if err != nil {
+		return nil, err
+	}
+	defer secret.Wipe(clientSecret)
+	accessToken, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "access_token_ref")
+	if err != nil {
+		return nil, err
+	}
+	defer secret.Wipe(accessToken)
+	if err := requireACMEDNS01Fields("akamai", map[string]string{"zone": cfg.Zone, "endpoint": cfg.Endpoint}); err != nil {
+		return nil, err
+	}
+	if len(clientToken) == 0 || len(clientSecret) == 0 || len(accessToken) == 0 {
+		return nil, errors.New("server: akamai dns-01 credential refs client_token_ref, client_secret_ref, and access_token_ref are required")
+	}
+	return dnsakamai.New(cfg.Zone, dnsakamai.Credentials{
+		ClientToken: clientToken, ClientSecret: clientSecret, AccessToken: accessToken,
+	}, dnsakamai.WithEndpoint(cfg.Endpoint)), nil
+}
+
+func (a *servedACMEDNS01Automation) ultradnsProviderForPayload(ctx context.Context, tenantID string, payload acmeDNS01OutboxPayload) (acme.DNSProvider, error) {
+	var cfg struct {
+		Zone     string `json:"zone,omitempty"`
+		Endpoint string `json:"endpoint,omitempty"`
+	}
+	if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
+		return nil, fmt.Errorf("server: decode ultradns dns-01 config: %w", err)
+	}
+	if strings.TrimSpace(cfg.Zone) == "" {
+		cfg.Zone = payloadZoneFallback(payload)
+	}
+	token, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "bearer_token_ref")
+	if err != nil {
+		return nil, err
+	}
+	defer secret.Wipe(token)
+	if err := requireACMEDNS01Fields("ultradns", map[string]string{"zone": cfg.Zone}); err != nil {
+		return nil, err
+	}
+	if len(token) == 0 {
+		return nil, errors.New("server: ultradns dns-01 credential ref bearer_token_ref is required")
+	}
+	opts := []dnsultradns.Option{}
+	if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
+		opts = append(opts, dnsultradns.WithEndpoint(endpoint))
+	}
+	return dnsultradns.New(cfg.Zone, dnsultradns.Credentials{BearerToken: token}, opts...), nil
+}
+
+func (a *servedACMEDNS01Automation) acmeDNSProviderForPayload(ctx context.Context, tenantID string, payload acmeDNS01OutboxPayload) (acme.DNSProvider, error) {
+	var cfg struct {
+		Subdomain string `json:"subdomain"`
+		Endpoint  string `json:"endpoint,omitempty"`
+	}
+	if err := decodeACMEDNS01ProviderConfig(payload.Config, &cfg); err != nil {
+		return nil, fmt.Errorf("server: decode acmedns dns-01 config: %w", err)
+	}
+	username, err := a.secretRefString(ctx, tenantID, payload.CredentialRefs, "username_ref")
+	if err != nil {
+		return nil, err
+	}
+	password, err := a.secretRef(ctx, tenantID, payload.CredentialRefs, "password_ref")
+	if err != nil {
+		return nil, err
+	}
+	defer secret.Wipe(password)
+	if err := requireACMEDNS01Fields("acmedns", map[string]string{"subdomain": cfg.Subdomain}); err != nil {
+		return nil, err
+	}
+	if username == "" || len(password) == 0 {
+		return nil, errors.New("server: acmedns dns-01 credential refs username_ref and password_ref are required")
+	}
+	opts := []dnsacmedns.Option{}
+	if endpoint := strings.TrimSpace(cfg.Endpoint); endpoint != "" {
+		opts = append(opts, dnsacmedns.WithEndpoint(endpoint))
+	}
+	return dnsacmedns.New(cfg.Subdomain, dnsacmedns.Credentials{Username: username, Password: password}, opts...), nil
 }
 
 func (a *servedACMEDNS01Automation) pluginProviderForPayload(ctx context.Context, tenantID string, payload acmeDNS01OutboxPayload) (acme.DNSProvider, error) {

@@ -167,7 +167,7 @@ func (c tenantHTTPChannel) Notify(ctx context.Context, alert Alert) error {
 	if err != nil {
 		return fmt.Errorf("tenant channel %q: request failed", c.id)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1024))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("tenant channel %q: endpoint returned HTTP %d", c.id, resp.StatusCode)
